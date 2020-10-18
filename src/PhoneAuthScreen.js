@@ -6,11 +6,14 @@ import {
     StyleSheet,
     SafeAreaView,
     TouchableOpacity,
+    DeviceEventEmitter,
     View,
     Text,
     TextInput
 } from 'react-native'
 import auth from '@react-native-firebase/auth';
+import OTPInputView from '@twotalltotems/react-native-otp-input'
+import RNOtpVerify from 'react-native-otp-verify';
 
 class PhoneAuthScreen extends Component {
     state = {
@@ -22,6 +25,29 @@ class PhoneAuthScreen extends Component {
     validatePhoneNumber = () => {
         var regexp = /^\+[0-9]?()[0-9](\s|\S)(\d[0-9]{8,16})$/
         return regexp.test(this.state.phone)
+    };
+    componentDidMount() {
+        RNOtpVerify.getOtp()
+            .then(p => RNOtpVerify.addListener(this.otpHandler))
+            .catch(p => console.log(p));
+    }
+
+    otpHandler = (message: string) => {
+        console.log('SMS :: ',message)
+        const otp = /(\d{6})/g.exec(message)[1];
+        console.log(otp);
+        this.setState({verificationCode: otp });
+        // RNOtpVerify.removeListener();
+        // Keyboard.dismiss();
+    }
+    componentWillUnmount() {
+        RNOtpVerify.removeListener();
+    }
+
+    onChangeText = (value)=> {
+        this.setState({
+            verificationCode: value
+        })
     }
 
     handleSendCode = async() => {
@@ -47,45 +73,88 @@ class PhoneAuthScreen extends Component {
     }
 
     handleVerifyCode = () => {
+
+        // let credential = auth().AuthProvider.credential(this.state.confirmResult.verificationId, code);
+        // auth().signInWithCredential(credential).then((auth) => {
+        //     console.log(auth)
+        // }).catch(err => { console.log(err)})
+
+
+        this.unsubscribe = auth().onAuthStateChanged((usernew) => {
+            // alert(JSON.stringify(user))
+            if (usernew) {
+
+                console.log('data check',usernew.uid)
+                //hit Api
+            } else {
+                // User has been signed out, reset the state
+                console.log("user seassion has to be failed")
+
+            }
+        });
+
+
+       // get user id for ios
+
         // Request for OTP verification
-        const { confirmResult, verificationCode } = this.state
-        if (verificationCode.length == 6) {
-            confirmResult
-                .confirm(verificationCode)
-                .then(user => {
-                    console.log("user Data is :",user.user)
-                    this.setState({ userId: user.user.uid })
-                    alert(`Verified! ${user.user.uid}`)
-                })
-                .catch(error => {
-                    alert(error.message)
-                    console.log(error)
-                })
-        } else {
-            alert('Please enter a 6 digit OTP code.')
-        }
+        // const { confirmResult, verificationCode } = this.state
+        // if (verificationCode.length == 6) {
+        //     confirmResult
+        //         .confirm(verificationCode)
+        //         .then(user => {
+        //
+        //
+        //             this.unsubscribe = auth().onAuthStateChanged((usernew) => {
+        //                 // alert(JSON.stringify(user))
+        //                 if (usernew) {
+        //
+        //                     console.log('data check',usernew.uid)
+        //                     //hit Api
+        //                 } else {
+        //                     // User has been signed out, reset the state
+        //
+        //                 }
+        //             });
+        //             // console.log("user Data is :",user)
+        //             // // this.setState({ userId: user.uid })
+        //             // // alert(`Verified! ${user.uid}`)
+        //         })
+        //         .catch(error => {
+        //             alert(error.message)
+        //             console.log(error)
+        //         })
+        // } else {
+        //     alert('Please enter a 6 digit OTP code.')
+        // }
     }
 
     renderConfirmationCodeView = () => {
         return (
-            <View style={styles.verificationView}>
-                <TextInput
-                    style={styles.textInput}
-                    placeholder='Verification code'
-                    placeholderTextColor='#eee'
-                    value={this.state.verificationCode}
-                    keyboardType='numeric'
-                    onChangeText={verificationCode => {
-                        this.setState({ verificationCode })
-                    }}
-                    maxLength={6}
-                />
-                <TouchableOpacity
-                    style={[styles.themeButton, { marginTop: 20 }]}
-                    onPress={this.handleVerifyCode}>
-                    <Text style={styles.themeButtonTitle}>Verify Code</Text>
-                </TouchableOpacity>
-            </View>
+            <OTPInputView
+                style={{width: '80%', height: 200}}
+                pinCount={6}
+                //code={this.state.verificationCode} //You can supply this prop or not. The component will be used as a controlled / uncontrolled component respectively.
+               // onCodeChanged = {code => { this.setState({verificationCode:code})}}
+                autoFocusOnLoad
+                codeInputFieldStyle={styles.underlineStyleBase}
+                codeInputHighlightStyle={styles.underlineStyleHighLighted}
+                onCodeFilled = {(code => {
+                    console.log(`Code is ${code}, you are good to go!`);
+
+                    this.unsubscribe = auth().onAuthStateChanged((usernew) => {
+                        // alert(JSON.stringify(user))
+                        if (usernew) {
+
+                            console.log('data check',usernew.uid)
+                            //hit Api
+                        } else {
+                            // User has been signed out, reset the state
+                            console.log("user seassion has to be failed")
+
+                        }
+                    });
+                })}
+            />
         )
     }
 
@@ -118,7 +187,7 @@ class PhoneAuthScreen extends Component {
                         </Text>
                     </TouchableOpacity>
 
-                    {this.state.confirmResult ? this.renderConfirmationCodeView() : null}
+                    {!this.state.confirmResult ? this.renderConfirmationCodeView() : null}
                 </View>
             </SafeAreaView>
         )
@@ -165,7 +234,26 @@ const styles = StyleSheet.create({
         width: '100%',
         alignItems: 'center',
         marginTop: 50
-    }
+    },
+    borderStyleBase: {
+        width: 30,
+        height: 45
+    },
+
+    borderStyleHighLighted: {
+        borderColor: "#03DAC6",
+    },
+
+    underlineStyleBase: {
+        width: 30,
+        height: 45,
+        borderWidth: 0,
+        borderBottomWidth: 1,
+    },
+
+    underlineStyleHighLighted: {
+        borderColor: "#03DAC6",
+    },
 })
 
 export default PhoneAuthScreen
